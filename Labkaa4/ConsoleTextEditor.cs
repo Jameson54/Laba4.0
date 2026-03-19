@@ -7,25 +7,25 @@ namespace TextEditorApp
 {
   public class ConsoleTextEditor
   {
-    private TextFile currentFile;
-    private TextFileOriginator originator;
-    private TextEditorHistory history;
-    private TextFileSearcher searcher;
-    private bool isRunning;
+    private TextFile _currentFile;
+    private TextFileOriginator _originator;
+    private TextEditorHistory _history;
+    private TextFileSearcher _searcher;
+    private bool _isRunning;
 
     public ConsoleTextEditor()
     {
-      originator = new TextFileOriginator();
-      history = new TextEditorHistory(originator);
-      searcher = new TextFileSearcher();
-      isRunning = true;
+      _originator = new TextFileOriginator();
+      _history = new TextEditorHistory(_originator);
+      _searcher = new TextFileSearcher();
+      _isRunning = true;
     }
 
     public void Run()
     {
       Console.WriteLine("=== Текстовый редактор ===");
 
-      while (isRunning)
+      while (_isRunning)
       {
         ShowMainMenu();
         string choice = Console.ReadLine();
@@ -42,7 +42,7 @@ namespace TextEditorApp
             SearchFiles();
             break;
           case "4":
-            if (currentFile != null)
+            if (_currentFile != null)
             {
               EditFile();
             }
@@ -58,7 +58,7 @@ namespace TextEditorApp
             TestSerialization();
             break;
           case "0":
-            isRunning = false;
+            _isRunning = false;
             break;
           default:
             Console.WriteLine("Неверный выбор!");
@@ -87,11 +87,11 @@ namespace TextEditorApp
 
       if (File.Exists(path))
       {
-        currentFile = new TextFile(path);
-        originator.SetContent(currentFile.Content);
-        history.Clear();
-        history.Backup();
-        Console.WriteLine($"Файл '{currentFile.GetFileName()}' открыт");
+        _currentFile = new TextFile(path);
+        _originator.SetContent(_currentFile.Content);
+        _history.Clear();
+        _history.Backup();
+        Console.WriteLine($"Файл '{_currentFile.GetFileName()}' открыт");
       }
       else
       {
@@ -104,24 +104,23 @@ namespace TextEditorApp
       Console.Write("Введите путь для нового файла: ");
       string path = Console.ReadLine();
 
-      currentFile = new TextFile(path);
-      currentFile.Content = string.Empty;
-      originator.SetContent(string.Empty);
-      history.Clear();
-      history.Backup();
+      _currentFile = new TextFile(path);
+      _currentFile.Content = string.Empty;
+      _originator.SetContent(string.Empty);
+      _history.Clear();
+      _history.Backup();
       Console.WriteLine("Новый файл создан");
     }
 
     private void EditFile()
     {
       bool editing = true;
-
       while (editing)
       {
         Console.WriteLine("\n--- Редактирование ---");
         Console.WriteLine("Текущее содержимое:");
         Console.WriteLine("---------------------");
-        Console.WriteLine(originator.GetContent());
+        Console.WriteLine(_originator.GetContent());
         Console.WriteLine("---------------------");
         Console.WriteLine("Команды:");
         Console.WriteLine("1. Добавить текст");
@@ -138,17 +137,17 @@ namespace TextEditorApp
           case "1":
             Console.Write("Введите текст: ");
             string newText = Console.ReadLine();
-            history.Backup();
-            originator.SetContent(originator.GetContent() + newText + "\n");
+            _history.Backup();
+            _originator.SetContent(_originator.GetContent() + newText + "\n");
             break;
           case "2":
-            history.Backup();
-            originator.SetContent(string.Empty);
+            _history.Backup();
+            _originator.SetContent(string.Empty);
             break;
           case "3":
-            if (history.CanUndo())
+            if (_history.CanUndo())
             {
-              history.Undo();
+              _history.Undo();
               Console.WriteLine("Отмена выполнена");
             }
             else
@@ -157,10 +156,10 @@ namespace TextEditorApp
             }
             break;
           case "4":
-            if (currentFile != null)
+            if (_currentFile != null)
             {
-              currentFile.Content = originator.GetContent();
-              currentFile.SaveToFile();
+              _currentFile.Content = _originator.GetContent();
+              _currentFile.SaveToFile();
               Console.WriteLine("Файл сохранен");
             }
             break;
@@ -192,7 +191,7 @@ namespace TextEditorApp
         Console.Write("Введите ключевое слово: ");
         string keyword = Console.ReadLine();
 
-        List<string> results = searcher.SearchByKeyword(directory, keyword);
+        List<string> results = _searcher.SearchByKeyword(directory, keyword);
 
         Console.WriteLine($"\nНайдено файлов: {results.Count}");
         foreach (string file in results)
@@ -211,7 +210,7 @@ namespace TextEditorApp
         Console.WriteLine("2. Любому из слов");
         string matchType = Console.ReadLine();
 
-        List<string> results = searcher.SearchByKeywords(directory, keywords, matchType == "1");
+        List<string> results = _searcher.SearchByKeywords(directory, keywords, matchType == "1");
 
         Console.WriteLine($"\nНайдено файлов: {results.Count}");
         foreach (string file in results)
@@ -236,8 +235,8 @@ namespace TextEditorApp
       string keywordsInput = Console.ReadLine();
       List<string> keywords = keywordsInput.Split(',').Select(k => k.Trim()).ToList();
 
-      searcher.CreateIndex(directory, keywords);
-      var index = searcher.GetFileIndex();
+      _searcher.CreateIndex(directory, keywords);
+      var index = _searcher.GetFileIndex();
 
       Console.WriteLine("\n--- Индекс файлов ---");
       foreach (var entry in index)
@@ -250,7 +249,7 @@ namespace TextEditorApp
 
     private void TestSerialization()
     {
-      if (currentFile == null)
+      if (_currentFile == null)
       {
         Console.WriteLine("Сначала откройте файл!");
         return;
@@ -266,7 +265,7 @@ namespace TextEditorApp
       if (choice == "1")
       {
         string binaryFile = testFile + ".bin";
-        currentFile.BinarySerialize(binaryFile);
+        _currentFile.BinarySerialize(binaryFile);
         Console.WriteLine($"Бинарная сериализация в {binaryFile}");
 
         TextFile deserialized = TextFile.BinaryDeserialize(binaryFile);
@@ -275,7 +274,7 @@ namespace TextEditorApp
       else if (choice == "2")
       {
         string xmlFile = testFile + ".xml";
-        currentFile.XmlSerialize(xmlFile);
+        _currentFile.XmlSerialize(xmlFile);
         Console.WriteLine($"XML сериализация в {xmlFile}");
 
         TextFile deserialized = TextFile.XmlDeserialize(xmlFile);

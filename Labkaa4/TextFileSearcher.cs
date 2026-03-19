@@ -45,23 +45,26 @@ namespace TextEditorApp
     public List<string> SearchByKeywords(string directoryPath, List<string> keywords, bool matchAll = true)
     {
       searchResults.Clear();
+      bool matches;
+      string[] files;
 
+      matches = matchAll;
       try
       {
-        string[] files = Directory.GetFiles(directoryPath, "*.txt", SearchOption.AllDirectories);
+        files = Directory.GetFiles(directoryPath, "*.txt", SearchOption.AllDirectories);
 
         foreach (string file in files)
         {
-          bool matches = matchAll
-              ? KeywordsMatchAll(file, keywords)
-              : KeywordsMatchAny(file, keywords);
+             KeywordsMatchAll(file, keywords);
+             KeywordsMatchAny(file, keywords);
 
           if (matches)
           {
             searchResults.Add(file);
           }
         }
-
+      
+        
         return searchResults;
       }
       catch (Exception ex)
@@ -72,9 +75,10 @@ namespace TextEditorApp
 
     private bool FileContainsKeyword(string filePath, string keyword)
     {
+      string content;
       try
       {
-        string content = File.ReadAllText(filePath);
+        content = File.ReadAllText(filePath);
         return content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0;
       }
       catch
@@ -85,9 +89,10 @@ namespace TextEditorApp
 
     private bool KeywordsMatchAll(string filePath, List<string> keywords)
     {
+      string content;
       try
       {
-        string content = File.ReadAllText(filePath);
+        content = File.ReadAllText(filePath);
         return keywords.All(keyword =>
             content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
       }
@@ -99,9 +104,10 @@ namespace TextEditorApp
 
     private bool KeywordsMatchAny(string filePath, List<string> keywords)
     {
+      string content;
       try
       {
-        string content = File.ReadAllText(filePath);
+        content = File.ReadAllText(filePath);
         return keywords.Any(keyword =>
             content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
       }
@@ -112,6 +118,8 @@ namespace TextEditorApp
     }
     public void CreateIndex(string directoryPath, List<string> keywords)
     {
+      List<string> foundKeywords;
+      string content;
       fileIndex.Clear();
 
       try
@@ -120,8 +128,8 @@ namespace TextEditorApp
 
         foreach (string file in files)
         {
-          List<string> foundKeywords = new List<string>();
-          string content = File.ReadAllText(file);
+          foundKeywords = new List<string>();
+          content = File.ReadAllText(file);
 
           foreach (string keyword in keywords)
           {

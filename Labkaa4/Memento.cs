@@ -17,62 +17,62 @@ namespace TextEditorApp
 
   public class TextFileOriginator
   {
-    private string content;
+    private string _content;
 
     public void SetContent(string newContent)
     {
-      content = newContent;
+      _content = newContent;
     }
 
     public string GetContent()
     {
-      return content;
+      return _content;
     }
 
     public TextFileMemento SaveState()
     {
-      return new TextFileMemento(content);
+      return new TextFileMemento(_content);
     }
 
     public void RestoreState(TextFileMemento memento)
     {
-      content = memento.Content;
+      _content = memento.Content;
     }
   }
 
   public class TextEditorHistory
   {
-    private Stack<TextFileMemento> history;
-    private TextFileOriginator originator;
+    private Stack<TextFileMemento> _history;
+    private TextFileOriginator _originator;
 
     public TextEditorHistory(TextFileOriginator originator)
     {
-      this.history = new Stack<TextFileMemento>();
-      this.originator = originator;
+      this._history = new Stack<TextFileMemento>();
+      this._originator = originator;
     }
 
     public void Backup()
     {
-      history.Push(originator.SaveState());
+      _history.Push(_originator.SaveState());
     }
 
     public void Undo()
     {
-      if (history.Count > 0)
+      if (_history.Count > 0)
       {
-        TextFileMemento memento = history.Pop();
-        originator.RestoreState(memento);
+        TextFileMemento memento = _history.Pop();
+        _originator.RestoreState(memento);
       }
     }
 
     public void Clear()
     {
-      history.Clear();
+      _history.Clear();
     }
 
     public bool CanUndo()
     {
-      return history.Count > 0;
+      return _history.Count > 0;
     }
   }
 }

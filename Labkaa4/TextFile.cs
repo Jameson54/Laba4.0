@@ -1,138 +1,415 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Text;
-using System.Xml;
-using System.Xml.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Runtime.Serialization;
+using System.Linq;
 
 namespace TextEditorApp
 {
-  [Serializable]
-  public class TextFile
+  public class ConsoleTextEditor
   {
-    public string FilePath { get; set; }
-    public string Content { get; set; }
-    public DateTime LastModified { get; set; }
-    public bool IsModified { get; set; }
+    private TextFile _currentFile;
+    private readonly TextFileOriginator _originator;
+    private readonly TextEditorHistory _history;
+    private readonly TextFileSearcher _searcher;
+    private bool _isFileOpen;
 
-    public TextFile()
+    public ConsoleTextEditor()
     {
-      FilePath = string.Empty;
-      Content = string.Empty;
-      LastModified = DateTime.Now;
-      IsModified = false;
+      _originator = new TextFileOriginator();
+      _history = new TextEditorHistory(_originator);
+      _searcher = new TextFileSearcher();
+      _isFileOpen = false;
     }
 
-    public TextFile(string path)
+    public void Run()
     {
-      FilePath = path;
-      LoadFromFile();
+      bool exit = false;
+
+      while (!exit)
+      {
+        Console.Clear();
+        DisplayMainMenu();
+        string choice = Console.ReadLine();
+
+        switch (choice)
+        {
+          case "1":
+            CreateNewFile();
+            break;
+          case "2":
+            OpenFile();
+            break;
+          case "3":
+            if (_isFileOpen)
+              EditFile();
+            else
+              Console.WriteLine("Сначала откройте или создайте файл!");
+            break;
+          case "4":
+            SearchFiles();
+            break;
+          case "5":
+            IndexFiles();
+            break;
+          case "6":
+            exit = true;
+            break;
+          default:
+            Console.WriteLine("Неверный выбор. Нажмите любую клавишу...");
+            Console.ReadKey();
+            break;
+        }
+      }
     }
 
-    public void LoadFromFile()
+    private void DisplayMainMenu()
+    {
+      Console.WriteLine("=== Текстовый редактор ===");
+      Console.WriteLine("1. Создать новый файл");
+      Console.WriteLine("2. Открыть существующий файл");
+      Console.WriteLine("3. Редактировать текущий файл");
+      Console.WriteLine("4. Поиск файлов по ключевым словам");
+      Console.WriteLine("5. Индексация файлов");
+      Console.WriteLine("6. Выход");
+      Console.Write("Выберите действие: ");
+    }
+
+    private void CreateNewFile()
+    {
+      Console.Write("Введите путь для нового файла: ");
+      string path = Console.ReadLine();
+
+      try
+      {
+        _currentFile = new TextFile
+        {
+          FilePath = path,
+          Content = string.Empty,
+          IsModified = true
+        };
+
+        _originator.SetContent(_currentFile.Content);
+        _history.Clear();
+        _history.Backup();
+        _isFileOpen = true;
+
+        Console.WriteLine($"Создан новый файл: {path}");
+        Console.WriteLine("Нажмите любую клавишу для продолжения...");
+        Console.ReadKey();
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine($"Ошибка при создании файла: {ex.Message}");
+        Console.ReadKey();
+      }
+    }
+
+    private void OpenFile()
+    {
+      Console.Write("Введите путь к файлу: ");
+      string path = Console.ReadLine();
+
+      try
+      {
+        _currentFile = new TextFile(path);
+        _originator.SetContent(_currentFile.Content);
+        _history.Clear();
+        _history.Backup();
+        _isFileOpen = true;
+
+        Console.WriteLine($"Файл загружен. Содержимое:\n{_currentFile.Content}");
+        Console.WriteLine("Нажмите любую клавишу для продолжения...");
+        Console.ReadKey();
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine($"Ошибка при открытии файла: {ex.Message}");
+        Console.ReadKey();
+      }
+    }
+
+    private void EditFile()
+    {
+      bool exitEdit = false;
+
+      while (!exitEdit)
+      {
+        Console.Clear();
+        Console.WriteLine("=== Редактирование файла ===");
+        Console.WriteLine($"Текущий файл: {_currentFile.GetFileName()}");
+        Console.WriteLine($"Содержимое:\n{_originator.GetContent()}");
+        Console.WriteLine("\n--- Действия ---");
+        Console.WriteLine("1. Редактировать текст");
+        Console.WriteLine("2. Отменить последнее изменение");
+        Console.WriteLine("3. Сохранить файл");
+        Console.WriteLine("4. Сохранить как (бинарная сериализация)");
+        Console.WriteLine("5. Сохранить как (XML сериализация)");
+        Console.WriteLine("6. Выход без сохранения");
+        Console.Write("Выберите действие: ");
+
+        string choice = Console.ReadLine();
+
+        switch (choice)
+        {
+          case "1":
+            EditText();
+            break;
+          case "2":
+            if (_history.CanUndo())
+            {
+              _history.Undo();
+              _currentFile.Content = _originator.GetContent();
+              _currentFile.IsModified = true;
+              Console.WriteLine("Изменение отменено.");
+            }
+            else
+            {
+              Console.WriteLine("Нет действий для отмены.");
+            }
+            Console.ReadKey();
+            break;
+          case "3":
+            SaveFile();
+            break;
+          case "4":
+            SaveAsBinary();
+            break;
+          case "5":
+            SaveAsXml();
+            break;
+          case "6":
+            if (_currentFile.IsModified)
+            {
+              Console.Write("Есть несохранённые изменения. Выйти без сохранения? (y/n): ");
+              string confirm = Console.ReadLine();
+              if (confirm?.ToLower() == "y")
+                exitEdit = true;
+            }
+            else
+            {
+              exitEdit = true;
+            }
+            break;
+          default:
+            Console.WriteLine("Неверный выбор.");
+            Console.ReadKey();
+            break;
+        }
+      }
+    }
+
+    private void EditText()
+    {
+      Console.WriteLine("Введите новый текст (для завершения введите пустую строку):");
+      var newContent = new System.Text.StringBuilder();
+      string line;
+
+      while ((line = Console.ReadLine()) != "")
+      {
+        newContent.AppendLine(line);
+      }
+
+      if (newContent.Length > 0)
+      {
+        _history.Backup();
+        string content = newContent.ToString().TrimEnd(Environment.NewLine.ToCharArray());
+        _originator.SetContent(content);
+        _currentFile.Content = _originator.GetContent();
+        _currentFile.IsModified = true;
+        Console.WriteLine("Текст обновлён.");
+      }
+      else
+      {
+        Console.WriteLine("Текст не изменён.");
+      }
+      Console.ReadKey();
+    }
+
+    private void SaveFile()
     {
       try
       {
-        if (File.Exists(FilePath))
+        _currentFile.Content = _originator.GetContent();
+        _currentFile.SaveToFile();
+        Console.WriteLine("Файл сохранён.");
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine($"Ошибка при сохранении: {ex.Message}");
+      }
+      Console.ReadKey();
+    }
+
+    private void SaveAsBinary()
+    {
+      Console.Write("Введите путь для бинарного сохранения: ");
+      string path = Console.ReadLine();
+
+      try
+      {
+        _currentFile.Content = _originator.GetContent();
+        _currentFile.BinarySerialize(path);
+        Console.WriteLine($"Файл сохранён в бинарном формате: {path}");
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine($"Ошибка при бинарном сохранении: {ex.Message}");
+      }
+      Console.ReadKey();
+    }
+
+    private void SaveAsXml()
+    {
+      Console.Write("Введите путь для XML сохранения: ");
+      string path = Console.ReadLine();
+
+      try
+      {
+        _currentFile.Content = _originator.GetContent();
+        _currentFile.XmlSerialize(path);
+        Console.WriteLine($"Файл сохранён в XML формате: {path}");
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine($"Ошибка при XML сохранении: {ex.Message}");
+      }
+      Console.ReadKey();
+    }
+
+    private void SearchFiles()
+    {
+      Console.Clear();
+      Console.WriteLine("=== Поиск файлов ===");
+      Console.Write("Введите путь к директории для поиска: ");
+      string directory = Console.ReadLine();
+
+      Console.Write("Искать в поддиректориях? (y/n): ");
+      bool searchSubdirs = Console.ReadLine()?.ToLower() == "y";
+
+      Console.WriteLine("Выберите тип поиска:");
+      Console.WriteLine("1. По одному ключевому слову");
+      Console.WriteLine("2. По нескольким ключевым словам");
+      Console.Write("Выбор: ");
+      string searchType = Console.ReadLine();
+
+      try
+      {
+        List<string> results;
+
+        if (searchType == "1")
         {
-          Content = File.ReadAllText(FilePath, Encoding.UTF8);
-          LastModified = File.GetLastWriteTime(FilePath);
-          IsModified = false;
+          Console.Write("Введите ключевое слово: ");
+          string keyword = Console.ReadLine();
+          results = _searcher.SearchByKeyword(directory, keyword, searchSubdirs);
+        }
+        else if (searchType == "2")
+        {
+          Console.Write("Введите ключевые слова через запятую: ");
+          string keywordsInput = Console.ReadLine();
+          string[] keywords = keywordsInput.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(k => k.Trim())
+                                           .ToArray();
+
+          if (keywords.Length == 0)
+          {
+            Console.WriteLine("Не введено ни одного ключевого слова.");
+            Console.ReadKey();
+            return;
+          }
+
+          Console.WriteLine("Выберите условие поиска:");
+          Console.WriteLine("1. Файл должен содержать ВСЕ ключевые слова");
+          Console.WriteLine("2. Файл должен содержать ЛЮБОЕ из ключевых слов");
+          Console.Write("Выбор: ");
+          string matchType = Console.ReadLine();
+
+          bool matchAll = matchType == "1";
+          results = _searcher.SearchByKeywords(directory, keywords, matchAll, searchSubdirs);
         }
         else
         {
-          Content = string.Empty;
-          IsModified = true;
+          Console.WriteLine("Неверный тип поиска.");
+          Console.ReadKey();
+          return;
         }
+
+        DisplaySearchResults(results);
       }
       catch (Exception ex)
       {
-        throw new Exception($"Ошибка при загрузке файла: {ex.Message}");
+        Console.WriteLine($"Ошибка при поиске: {ex.Message}");
+        Console.ReadKey();
       }
     }
 
-    public void SaveToFile()
+    private void DisplaySearchResults(List<string> results)
     {
-      try
-      {
-        File.WriteAllText(FilePath, Content, Encoding.UTF8);
-        LastModified = DateTime.Now;
-        IsModified = false;
-      }
-      catch (Exception ex)
-      {
-        throw new Exception($"Ошибка при сохранении файла: {ex.Message}");
-      }
-    }
+      Console.WriteLine($"\n=== Результаты поиска (найдено: {results.Count}) ===");
 
-    public void BinarySerialize(string outputPath)
-    {
-      try
+      if (results.Count == 0)
       {
-        using (FileStream stream = new FileStream(outputPath, FileMode.Create))
+        Console.WriteLine("Файлы не найдены.");
+      }
+      else
+      {
+        for (int i = 0; i < results.Count; i++)
         {
-          BinaryFormatter formatter = new BinaryFormatter();
-          formatter.Serialize(stream, this);
+          Console.WriteLine($"{i + 1}. {results[i]}");
         }
       }
-      catch (Exception ex)
-      {
-        throw new Exception($"Ошибка при бинарной сериализации: {ex.Message}");
-      }
+
+      Console.WriteLine("\nНажмите любую клавишу для продолжения...");
+      Console.ReadKey();
     }
 
-    public static TextFile BinaryDeserialize(string inputPath)
+    private void IndexFiles()
     {
+      Console.Clear();
+      Console.WriteLine("=== Индексация файлов ===");
+      Console.Write("Введите путь к директории для индексации: ");
+      string directory = Console.ReadLine();
+
+      Console.Write("Введите ключевые слова для индексации (через запятую): ");
+      string keywordsInput = Console.ReadLine();
+      string[] keywords = keywordsInput.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                       .Select(k => k.Trim())
+                                       .ToArray();
+
+      if (keywords.Length == 0)
+      {
+        Console.WriteLine("Не введено ни одного ключевого слова.");
+        Console.ReadKey();
+        return;
+      }
+
+      Console.Write("Искать в поддиректориях? (y/n): ");
+      bool searchSubdirs = Console.ReadLine()?.ToLower() == "y";
+
       try
       {
-        using (FileStream stream = new FileStream(inputPath, FileMode.Open))
+        var index = _searcher.CreateIndex(directory, keywords, searchSubdirs);
+
+        Console.WriteLine($"\n=== Результаты индексации ===");
+        Console.WriteLine($"Найдено файлов с ключевыми словами: {index.Count}");
+
+        foreach (var kvp in index)
         {
-          BinaryFormatter formatter = new BinaryFormatter();
-          return (TextFile)formatter.Deserialize(stream);
+          Console.WriteLine($"\nФайл: {kvp.Key}");
+          Console.WriteLine($"Найденные ключевые слова: {string.Join(", ", kvp.Value)}");
+        }
+
+        if (index.Count == 0)
+        {
+          Console.WriteLine("\nФайлы, содержащие указанные ключевые слова, не найдены.");
         }
       }
       catch (Exception ex)
       {
-        throw new Exception($"Ошибка при бинарной десериализации: {ex.Message}");
+        Console.WriteLine($"Ошибка при индексации: {ex.Message}");
       }
-    }
 
-    public void XmlSerialize(string outputPath)
-    {
-      try
-      {
-        XmlSerializer serializer = new XmlSerializer(typeof(TextFile));
-        using (StreamWriter writer = new StreamWriter(outputPath))
-        {
-          serializer.Serialize(writer, this);
-        }
-      }
-      catch (Exception ex)
-      {
-        throw new Exception($"Ошибка при XML сериализации: {ex.Message}");
-      }
-    }
-
-    public static TextFile XmlDeserialize(string inputPath)
-    {
-      try
-      {
-        XmlSerializer serializer = new XmlSerializer(typeof(TextFile));
-        using (StreamReader reader = new StreamReader(inputPath))
-        {
-          return (TextFile)serializer.Deserialize(reader);
-        }
-      }
-      catch (Exception ex)
-      {
-        throw new Exception($"Ошибка при XML десериализации: {ex.Message}");
-      }
-    }
-
-    public string GetFileName()
-    {
-      return Path.GetFileName(FilePath);
+      Console.WriteLine("\nНажмите любую клавишу для продолжения...");
+      Console.ReadKey();
     }
   }
 }

@@ -1,159 +1,155 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
+using System.Text;
 
 namespace TextEditorApp
 {
   public class TextFileSearcher
   {
-    private List<string> searchResults;
-    private Dictionary<string, List<string>> fileIndex;
+    private readonly StringComparison _comparison = StringComparison.OrdinalIgnoreCase;
 
-    public TextFileSearcher()
+    public List<string> SearchByKeyword(string directory, string keyword, bool searchSubdirectories = false)
     {
-      searchResults = new List<string>();
-      fileIndex = new Dictionary<string, List<string>>();
-    }
+      var results = new List<string>();
 
-    public List<string> SearchByKeyword(string directoryPath, string keyword, bool recursive = true)
-    {
-      searchResults.Clear();
+      if (!Directory.Exists(directory))
+        throw new DirectoryNotFoundException($"Директория не найдена: {directory}");
 
-      try
+      var searchOption = searchSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+      string[] files = Directory.GetFiles(directory, "*.txt", searchOption);
+
+      foreach (string filePath in files)
       {
-        SearchOption searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        string[] files = Directory.GetFiles(directoryPath, "*.txt", searchOption);
-
-        foreach (string file in files)
+        try
         {
-          if (FileContainsKeyword(file, keyword))
+          string content = File.ReadAllText(filePath, Encoding.UTF8);
+          if (content.IndexOf(keyword, _comparison) >= 0)
           {
-            searchResults.Add(file);
+            results.Add(filePath);
           }
         }
+        catch (Exception ex)
+        {
+          Console.WriteLine($"Ошибка при чтении файла {filePath}: {ex.Message}");
+        }
+      }
 
-        return searchResults;
-      }
-      catch (Exception ex)
-      {
-        throw new Exception($"Ошибка при поиске файлов: {ex.Message}");
-      }
+      return results;
     }
 
-    public List<string> SearchByKeywords(string directoryPath, List<string> keywords, bool matchAll = true)
+    public List<string> SearchByKeywords(string directory, string[] keywords, bool matchAll, bool searchSubdirectories = false)
     {
-      searchResults.Clear();
-      bool matches;
-      string[] files;
+      var results = new List<string>();
 
-      matches = matchAll;
-      try
+      if (!Directory.Exists(directory))
+        throw new DirectoryNotFoundException($"Директория не найдена: {directory}");
+
+      if (keywords == null || keywords.Length == 0)
+        throw new ArgumentException("Не указаны ключевые слова для поиска");
+
+      var searchOption = searchSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+      string[] files = Directory.GetFiles(directory, "*.txt", searchOption);
+
+      foreach (string filePath in files)
       {
-        files = Directory.GetFiles(directoryPath, "*.txt", SearchOption.AllDirectories);
-
-        foreach (string file in files)
+        try
         {
-             KeywordsMatchAll(file, keywords);
-             KeywordsMatchAny(file, keywords);
+          string content = File.ReadAllText(filePath, Encoding.UTF8);
+          bool fileMatches;
 
-          if (matches)
+          if (matchAll)
           {
-            searchResults.Add(file);
+            fileMatches = KeywordsMatchAll(content, keywords);
+          }
+          else
+          {
+            fileMatches = KeywordsMatchAny(content, keywords);
+          }
+
+          if (fileMatches)
+          {
+            results.Add(filePath);
           }
         }
-      
-        
-        return searchResults;
-      }
-      catch (Exception ex)
-      {
-        throw new Exception($"Ошибка при поиске файлов: {ex.Message}");
-      }
-    }
-
-    private bool FileContainsKeyword(string filePath, string keyword)
-    {
-      string content;
-      try
-      {
-        content = File.ReadAllText(filePath);
-        return content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0;
-      }
-      catch
-      {
-        return false;
-      }
-    }
-
-    private bool KeywordsMatchAll(string filePath, List<string> keywords)
-    {
-      string content;
-      try
-      {
-        content = File.ReadAllText(filePath);
-        return keywords.All(keyword =>
-            content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
-      }
-      catch
-      {
-        return false;
-      }
-    }
-
-    private bool KeywordsMatchAny(string filePath, List<string> keywords)
-    {
-      string content;
-      try
-      {
-        content = File.ReadAllText(filePath);
-        return keywords.Any(keyword =>
-            content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
-      }
-      catch
-      {
-        return false;
-      }
-    }
-    public void CreateIndex(string directoryPath, List<string> keywords)
-    {
-      List<string> foundKeywords;
-      string content;
-      fileIndex.Clear();
-
-      try
-      {
-        string[] files = Directory.GetFiles(directoryPath, "*.txt", SearchOption.AllDirectories);
-
-        foreach (string file in files)
+        catch (Exception ex)
         {
-          foundKeywords = new List<string>();
-          content = File.ReadAllText(file);
+          Console.WriteLine($"Ошибка при чтении файла {filePath}: {ex.Message}");
+        }
+      }
+
+      return results;
+    }
+
+    public bool KeywordsMatchAll(string content, string[] keywords)
+    {
+      foreach (string keyword in keywords)
+      {
+        if (content.IndexOf(keyword, _comparison) < 0)
+          return false;
+      }
+      return true;
+    }
+
+    public bool KeywordsMatchAny(string content, string[] keywords)
+    {
+      foreach (string keyword in keywords)
+      {
+        if (content.IndexOf(keyword, _comparison) >= 0)
+          return true;
+      }
+      return false;
+    }
+
+    public Dictionary<string, List<string>> CreateIndex(string directory, string[] keywords, bool searchSubdirectories = false)
+    {
+      var fileIndex = new Dictionary<string, List<string>>();
+
+      if (!Directory.Exists(directory))
+        throw new DirectoryNotFoundException($"Директория не найдена: {directory}");
+
+      if (keywords == null || keywords.Length == 0)
+        throw new ArgumentException("Не указаны ключевые слова для индексации");
+
+      var searchOption = searchSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+      string[] files = Directory.GetFiles(directory, "*.txt", searchOption);
+
+      foreach (string filePath in files)
+      {
+        try
+        {
+          string content = File.ReadAllText(filePath, Encoding.UTF8);
+          var foundKeywords = new List<string>();
 
           foreach (string keyword in keywords)
           {
-            if (content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
+            if (content.IndexOf(keyword, _comparison) >= 0)
             {
               foundKeywords.Add(keyword);
             }
           }
 
-          if (foundKeywords.Any())
+          if (foundKeywords.Count > 0)
           {
-            fileIndex[file] = foundKeywords;
+            fileIndex[filePath] = foundKeywords;
           }
         }
+        catch (Exception ex)
+        {
+          Console.WriteLine($"Ошибка при индексации файла {filePath}: {ex.Message}");
+        }
       }
-      catch (Exception ex)
-      {
-        throw new Exception($"Ошибка при создании индекса: {ex.Message}");
-      }
+
+      return fileIndex;
     }
 
-    public Dictionary<string, List<string>> GetFileIndex()
+    public List<string> GetFileIndex(Dictionary<string, List<string>> index, string filePath)
     {
-      return fileIndex;
+      if (index.TryGetValue(filePath, out List<string> keywords))
+      {
+        return keywords;
+      }
+      return new List<string>();
     }
   }
 }
